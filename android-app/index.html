@@ -1,0 +1,1527 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-slate-950 text-slate-100">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Northwoods Cab - Taxi Dispatch</title>
+
+  <!-- PWA -->
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#0f172a">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="NW Cab">
+  <link rel="icon" href="icon-192.png">
+  <link rel="apple-touch-icon" href="icon-180-apple.png">
+
+  <!-- Tailwind -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Font Awesome -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+  <!-- jsPDF -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+  <!-- jsPDF AutoTable -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            cab: { 400: '#fbbf24', 500: '#f59e0b', 600: '#d97706', 700: '#b45309' }
+          }
+        }
+      }
+    };
+  </script>
+
+  <style>
+    body { font-family: Inter, ui-sans-serif, system-ui, sans-serif; }
+
+    .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: #020617; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: #334155; border-radius: 6px; }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #475569; }
+
+    .modal-backdrop { background: rgba(2, 6, 23, .84); backdrop-filter: blur(4px); }
+
+    .hidden { display: none !important; }
+
+    .nav-button {
+      padding: .55rem .9rem;
+      border-radius: .5rem;
+      font-size: .8rem;
+      color: #94a3b8;
+      transition: .15s;
+    }
+    .nav-button:hover { background: #1e293b; color: white; }
+    .nav-button.active { background: #f59e0b; color: #020617; font-weight: 700; }
+
+    .mobile-nav-button { color: #94a3b8; }
+    .mobile-nav-button.active { color: #f59e0b; }
+
+    .input {
+      width: 100%;
+      background: #020617;
+      border: 1px solid #334155;
+      border-radius: .5rem;
+      padding: .65rem .75rem;
+      color: white;
+      outline: none;
+      margin-top: .3rem;
+    }
+    .input:focus { border-color: #f59e0b; }
+  </style>
+</head>
+
+<body class="h-full bg-slate-950 text-slate-100">
+
+<!-- =========================================================
+     HEADER
+========================================================= -->
+<header class="bg-slate-900 border-b border-slate-800 sticky top-0 z-30">
+  <div class="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 py-3 space-y-3 sm:space-y-0">
+
+    <div class="flex items-center justify-between gap-3 sm:h-10">
+
+      <div class="flex items-center gap-2 min-w-0">
+        <div class="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-cab-500 flex items-center justify-center text-slate-950 text-lg sm:text-xl shadow-lg shrink-0">
+          <i class="fa-solid fa-taxi"></i>
+        </div>
+        <div class="min-w-0">
+          <h1 class="font-bold text-sm sm:text-lg text-white leading-tight truncate">NORTHWOODS CAB</h1>
+          <p class="text-[10px] sm:text-xs text-slate-400">Taxi Dispatch Console</p>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-2 shrink-0">
+        <div class="hidden md:block text-right mr-1">
+          <div id="clock" class="font-mono text-sm font-bold text-white">--:--:--</div>
+          <div class="text-[10px] text-slate-500">Wausau, WI</div>
+        </div>
+
+        <button onclick="openNewTripModal()"
+                class="bg-cab-500 hover:bg-cab-600 text-slate-950 font-bold h-11 px-3 sm:px-4 rounded-lg text-sm flex items-center justify-center gap-1.5">
+          <i class="fa-solid fa-plus"></i>
+          <span class="hidden sm:inline">New Dispatch</span>
+        </button>
+
+        <button onclick="openEndShiftModal()"
+                title="End shift and clear all saved data on this device"
+                class="bg-slate-800 border border-red-900/60 hover:bg-red-950 text-red-400 font-bold h-11 w-11 sm:w-auto sm:px-3 rounded-lg text-sm flex items-center justify-center gap-1.5">
+          <i class="fa-solid fa-power-off"></i>
+          <span class="hidden lg:inline">End Shift</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="flex items-center gap-2 bg-slate-800 border border-slate-700 h-11 px-3 rounded-lg sm:w-64 sm:ml-auto">
+      <i class="fa-solid fa-user-gear text-cab-500"></i>
+      <div class="flex-1 min-w-0">
+        <div class="text-[9px] uppercase text-slate-500 leading-none mb-0.5">Dispatcher</div>
+        <input id="controllerInput"
+               list="dispatcherList"
+               autocomplete="off"
+               placeholder="Select or type name"
+               onchange="saveController()"
+               class="bg-transparent text-xs font-semibold text-white outline-none w-full placeholder:text-slate-500 placeholder:font-normal">
+        <datalist id="dispatcherList"></datalist>
+      </div>
+    </div>
+
+  </div>
+</header>
+
+
+<!-- =========================================================
+     NAVIGATION (desktop/tablet)
+========================================================= -->
+<div class="hidden sm:block bg-slate-900 border-b border-slate-800">
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2">
+    <div class="flex flex-wrap gap-2">
+      <button id="navBoard" onclick="showView('board')" class="nav-button active">
+        <i class="fa-solid fa-table-cells-large mr-1"></i> Dispatch Board
+      </button>
+      <button id="navDrivers" onclick="showView('drivers')" class="nav-button">
+        <i class="fa-solid fa-users mr-1"></i> Fleet
+      </button>
+      <button id="navLogs" onclick="showView('logs')" class="nav-button">
+        <i class="fa-solid fa-file-lines mr-1"></i> Trip Logs
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- =========================================================
+     NAVIGATION (mobile bottom bar)
+========================================================= -->
+<nav class="sm:hidden fixed bottom-0 inset-x-0 z-30 bg-slate-900 border-t border-slate-800 flex pb-[env(safe-area-inset-bottom,0px)]">
+  <button id="navBoardMobile" onclick="showView('board')" class="mobile-nav-button active flex-1 py-2.5 flex flex-col items-center gap-1 text-[10px] font-semibold">
+    <i class="fa-solid fa-table-cells-large text-base"></i>
+    Board
+  </button>
+  <button id="navDriversMobile" onclick="showView('drivers')" class="mobile-nav-button flex-1 py-2.5 flex flex-col items-center gap-1 text-[10px] font-semibold">
+    <i class="fa-solid fa-users text-base"></i>
+    Fleet
+  </button>
+  <button id="navLogsMobile" onclick="showView('logs')" class="mobile-nav-button flex-1 py-2.5 flex flex-col items-center gap-1 text-[10px] font-semibold">
+    <i class="fa-solid fa-file-lines text-base"></i>
+    Logs
+  </button>
+</nav>
+
+<!-- =========================================================
+     MAIN
+========================================================= -->
+<main class="max-w-7xl mx-auto w-full p-3 sm:p-6 pb-24 sm:pb-6">
+
+  <!-- DISPATCH BOARD -->
+  <section id="viewBoard">
+    <div class="grid lg:grid-cols-2 gap-5">
+
+      <!-- PENDING -->
+      <div class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
+        <div class="p-4 border-b border-slate-800 flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <span class="w-3 h-3 rounded-full bg-amber-500 animate-pulse"></span>
+            <h2 class="font-bold">Pending Calls</h2>
+          </div>
+          <span id="pendingCount" class="text-xs bg-amber-500/10 text-amber-400 border border-amber-500/20 px-2 py-1 rounded-full">0</span>
+        </div>
+        <div id="pendingList" class="p-4 space-y-3 min-h-[400px] max-h-[650px] overflow-y-auto custom-scrollbar"></div>
+      </div>
+
+      <!-- ACTIVE -->
+      <div class="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
+        <div class="p-4 border-b border-slate-800 flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <span class="w-3 h-3 rounded-full bg-emerald-500 animate-pulse"></span>
+            <h2 class="font-bold">Active Trips</h2>
+          </div>
+          <span id="activeCount" class="text-xs bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-1 rounded-full">0</span>
+        </div>
+        <div id="activeList" class="p-4 space-y-3 min-h-[400px] max-h-[650px] overflow-y-auto custom-scrollbar"></div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- FLEET -->
+  <section id="viewDrivers" class="hidden">
+    <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 mb-5 flex flex-col sm:flex-row justify-between gap-4">
+      <div>
+        <h2 class="font-bold text-lg">Fleet &amp; Driver Roster</h2>
+        <p class="text-xs text-slate-400 mt-1">Manage drivers, vehicles and availability.</p>
+      </div>
+      <button onclick="openDriverModal()" class="bg-cab-500 hover:bg-cab-600 text-slate-950 font-bold px-4 py-2 rounded-lg text-sm">
+        <i class="fa-solid fa-user-plus mr-1"></i> Add Driver
+      </button>
+    </div>
+    <div id="driverGrid" class="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4"></div>
+  </section>
+
+  <!-- LOGS -->
+  <section id="viewLogs" class="hidden">
+    <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 mb-5">
+      <div class="flex flex-col lg:flex-row gap-3 lg:items-center lg:justify-between">
+        <div class="flex flex-col sm:flex-row gap-3">
+          <input id="searchInput" oninput="renderLogs()" type="text" placeholder="Search trips..."
+                 class="bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm w-full sm:w-72">
+          <select id="statusFilter" onchange="renderLogs()" class="bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-sm">
+            <option value="ALL">All Statuses</option>
+            <option value="PENDING">Pending</option>
+            <option value="EN_ROUTE">En Route</option>
+            <option value="COMPLETED">Completed</option>
+          </select>
+        </div>
+        <div class="grid grid-cols-2 sm:flex gap-2">
+          <button id="logsEditToggle" onclick="toggleLogsEdit()"
+                  class="bg-slate-800 border border-slate-700 hover:bg-slate-700 text-slate-300 font-bold h-11 px-4 rounded-lg text-sm">
+            <i class="fa-solid fa-lock mr-1"></i> Unlock Editing
+          </button>
+          <button onclick="exportPDF()" class="bg-red-600 hover:bg-red-500 text-white font-bold h-11 px-4 rounded-lg text-sm">
+            <i class="fa-solid fa-file-pdf mr-1"></i> Export PDF
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Table (tablet and up) -->
+    <div class="hidden sm:block bg-slate-900 border border-slate-800 rounded-xl overflow-hidden">
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead class="bg-slate-950 text-slate-400 text-xs uppercase">
+            <tr>
+              <th class="p-3 text-left">Trip</th>
+              <th class="p-3 text-left">Pickup</th>
+              <th class="p-3 text-left">Dropoff</th>
+              <th class="p-3 text-left">Driver</th>
+              <th class="p-3 text-left">Payment</th>
+              <th class="p-3 text-left">Status</th>
+              <th class="p-3 text-right">Fare</th>
+            </tr>
+          </thead>
+          <tbody id="logsBody" class="divide-y divide-slate-800"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Cards (mobile) -->
+    <div id="logsCards" class="sm:hidden bg-slate-900 border border-slate-800 rounded-xl divide-y divide-slate-800 overflow-hidden"></div>
+  </section>
+
+</main>
+
+<!-- =========================================================
+     NEW TRIP MODAL
+========================================================= -->
+<div id="tripModal" class="hidden fixed inset-0 z-50 modal-backdrop items-stretch sm:items-center justify-center p-0 sm:p-4">
+  <div class="bg-slate-900 border-0 sm:border border-slate-700 rounded-none sm:rounded-2xl w-full sm:max-w-lg h-full sm:h-auto max-h-full overflow-y-auto p-5 sm:p-6">
+    <div class="flex justify-between items-center mb-5">
+      <h2 class="font-bold text-lg"><i class="fa-solid fa-taxi text-cab-500 mr-2"></i>New Dispatch</h2>
+      <button onclick="closeModal('tripModal')" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+
+    <form onsubmit="createTrip(event)" novalidate class="space-y-4">
+      <div>
+        <label class="text-xs text-slate-400">Pickup Location</label>
+        <input id="pickupInput" required class="input" placeholder="400 Stewart Ave">
+      </div>
+      <div>
+        <label class="text-xs text-slate-400">Dropoff Destination</label>
+        <input id="dropoffInput" required class="input" placeholder="Aspirus Wausau Hospital">
+      </div>
+      <div>
+        <label class="text-xs text-slate-400">Pickup Time</label>
+        <input id="pickupTimeInput" type="time" class="input">
+      </div>
+      <div>
+        <label class="text-xs text-slate-400">Assign Driver</label>
+        <select id="tripDriverInput" class="input"></select>
+      </div>
+      <div>
+        <label class="text-xs text-slate-400">Notes</label>
+        <textarea id="notesInput" rows="3" class="input" placeholder="Passenger notes..."></textarea>
+      </div>
+      <div class="flex justify-end gap-3">
+        <button type="button" onclick="closeModal('tripModal')" class="px-4 py-2 text-sm text-slate-400">Cancel</button>
+        <button type="submit" class="bg-cab-500 hover:bg-cab-600 text-slate-950 font-bold px-5 py-2 rounded-lg text-sm">Create Dispatch</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- =========================================================
+     COMPLETE TRIP MODAL
+========================================================= -->
+<div id="completeModal" class="hidden fixed inset-0 z-50 modal-backdrop items-stretch sm:items-center justify-center p-0 sm:p-4">
+  <div class="bg-slate-900 border-0 sm:border border-slate-700 rounded-none sm:rounded-2xl w-full sm:max-w-md h-full sm:h-auto max-h-full overflow-y-auto p-5 sm:p-6">
+    <h2 class="font-bold text-lg mb-4">Complete Ride</h2>
+    <div id="completeInfo" class="bg-slate-950 rounded-lg p-3 text-xs text-slate-300 mb-4"></div>
+
+    <form onsubmit="completeTrip(event)" class="space-y-4">
+      <input id="completeTripId" type="hidden">
+      <div>
+        <label class="text-xs text-slate-400">Final Fare</label>
+        <input id="fareInput" type="number" step="0.01" min="0" required class="input" placeholder="0.00">
+      </div>
+      <div>
+        <label class="text-xs text-slate-400">Payment Method</label>
+        <select id="paymentInput" class="input">
+          <option value="Cash">Cash</option>
+          <option value="Credit Card">Credit Card</option>
+          <option value="Voucher">Voucher / Account</option>
+        </select>
+      </div>
+      <div class="flex justify-end gap-3">
+        <button type="button" onclick="closeModal('completeModal')" class="px-4 py-2 text-sm text-slate-400">Cancel</button>
+        <button type="submit" class="bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold px-5 py-2 rounded-lg text-sm">Complete Ride</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- =========================================================
+     DRIVER MODAL
+========================================================= -->
+<div id="driverModal" class="hidden fixed inset-0 z-50 modal-backdrop items-stretch sm:items-center justify-center p-0 sm:p-4">
+  <div class="bg-slate-900 border-0 sm:border border-slate-700 rounded-none sm:rounded-2xl w-full sm:max-w-md h-full sm:h-auto max-h-full overflow-y-auto p-5 sm:p-6">
+    <div class="flex justify-between items-center mb-5">
+      <h2 id="driverModalTitle" class="font-bold text-lg">Add Driver</h2>
+      <button onclick="closeModal('driverModal')" class="text-slate-400"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+
+    <form onsubmit="saveDriver(event)" class="space-y-4">
+      <input id="driverId" type="hidden">
+      <div>
+        <label class="text-xs text-slate-400">Driver Name</label>
+        <input id="driverName" required class="input" placeholder="John Smith">
+      </div>
+      <div>
+        <label class="text-xs text-slate-400">Unit / Callsign <span class="text-slate-600">(optional)</span></label>
+        <input id="driverCallsign" class="input" placeholder="Unit 101">
+      </div>
+      <div>
+        <label class="text-xs text-slate-400">Vehicle</label>
+        <input id="driverVehicle" class="input" placeholder="Ford Transit">
+      </div>
+      <div>
+        <label class="text-xs text-slate-400">Status</label>
+        <select id="driverStatus" class="input">
+          <option value="Available">Available</option>
+          <option value="On Break">On Break</option>
+          <option value="Offline">Offline</option>
+        </select>
+      </div>
+      <div class="flex justify-end gap-3">
+        <button type="button" onclick="closeModal('driverModal')" class="px-4 py-2 text-sm text-slate-400">Cancel</button>
+        <button type="submit" class="bg-cab-500 hover:bg-cab-600 text-slate-950 font-bold px-5 py-2 rounded-lg text-sm">Save Driver</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- =========================================================
+     END SHIFT MODAL
+========================================================= -->
+<div id="endShiftModal" class="hidden fixed inset-0 z-50 modal-backdrop items-stretch sm:items-center justify-center p-0 sm:p-4">
+  <div class="bg-slate-900 border border-red-900/60 rounded-2xl w-full max-w-sm p-6 self-center mx-4 sm:mx-0">
+    <h2 class="font-bold text-lg mb-2 text-red-400">
+      <i class="fa-solid fa-triangle-exclamation mr-2"></i>End Shift
+    </h2>
+    <p class="text-sm text-slate-300 mb-2">
+      This permanently clears all pending calls, active trips, trip logs, the fleet roster, and the shift
+      controller saved on this device.
+    </p>
+    <p class="text-xs text-slate-500 mb-5">
+      Export any trip logs you need first — this action cannot be undone.
+    </p>
+    <div class="flex justify-end gap-3">
+      <button onclick="closeModal('endShiftModal')" class="px-4 py-2 text-sm text-slate-400">Cancel</button>
+      <button onclick="endShift()" class="bg-red-600 hover:bg-red-500 text-white font-bold px-4 py-2 rounded-lg text-sm">
+        Clear Data &amp; End Shift
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- =========================================================
+     TOAST
+========================================================= -->
+<div id="toast" class="fixed bottom-20 sm:bottom-5 right-5 left-5 sm:left-auto z-[100] hidden bg-slate-900 border border-slate-700 rounded-xl shadow-2xl px-4 py-3 text-sm text-center sm:text-left"></div>
+
+<!-- =========================================================
+     JAVASCRIPT
+========================================================= -->
+<script>
+"use strict";
+
+/* =========================================================
+   DATA
+========================================================= */
+
+let drivers = loadData("northwoods_drivers", []);
+let trips = loadData("northwoods_trips", []);
+let dispatchers = loadData("northwoods_dispatchers", []);
+let controller = localStorage.getItem("northwoods_controller") || "";
+let logsUnlocked = false;
+
+/* =========================================================
+   STORAGE
+========================================================= */
+
+function loadData(key, fallback) {
+  try {
+    const saved = localStorage.getItem(key);
+    if (!saved) return fallback;
+    const parsed = JSON.parse(saved);
+    return Array.isArray(parsed) ? parsed : fallback;
+  } catch (error) {
+    console.error("Storage error:", error);
+    return fallback;
+  }
+}
+
+function saveData() {
+  localStorage.setItem("northwoods_drivers", JSON.stringify(drivers));
+  localStorage.setItem("northwoods_trips", JSON.stringify(trips));
+  localStorage.setItem("northwoods_dispatchers", JSON.stringify(dispatchers));
+  localStorage.setItem("northwoods_controller", controller);
+}
+
+/* =========================================================
+   STARTUP
+========================================================= */
+
+document.addEventListener("DOMContentLoaded", function () {
+  document.getElementById("controllerInput").value = controller;
+  populateDispatcherList();
+  updateClock();
+  setInterval(updateClock, 1000);
+  renderEverything();
+});
+
+/* =========================================================
+   CLOCK
+========================================================= */
+
+function updateClock() {
+  const now = new Date();
+  document.getElementById("clock").textContent = now.toLocaleTimeString("en-US", {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit"
+  });
+}
+
+/* =========================================================
+   NAVIGATION
+========================================================= */
+
+function showView(view) {
+  const views = {
+    board: document.getElementById("viewBoard"),
+    drivers: document.getElementById("viewDrivers"),
+    logs: document.getElementById("viewLogs")
+  };
+
+  Object.values(views).forEach(function (element) {
+    element.classList.add("hidden");
+  });
+  views[view].classList.remove("hidden");
+
+  document.querySelectorAll(".nav-button, .mobile-nav-button").forEach(function (button) {
+    button.classList.remove("active");
+  });
+
+  if (view === "board") {
+    document.getElementById("navBoard").classList.add("active");
+    document.getElementById("navBoardMobile").classList.add("active");
+  }
+  if (view === "drivers") {
+    document.getElementById("navDrivers").classList.add("active");
+    document.getElementById("navDriversMobile").classList.add("active");
+  }
+  if (view === "logs") {
+    document.getElementById("navLogs").classList.add("active");
+    document.getElementById("navLogsMobile").classList.add("active");
+    renderLogs();
+  }
+}
+
+/* =========================================================
+   RENDER EVERYTHING
+========================================================= */
+
+function renderEverything() {
+  renderBoard();
+  renderDrivers();
+  renderLogs();
+  updateDriverSelect();
+}
+
+/* =========================================================
+   DISPATCH BOARD
+========================================================= */
+
+function renderBoard() {
+  const pending = trips
+    .filter(function (trip) { return trip.status === "PENDING"; })
+    .sort(function (a, b) { return timeStringToMinutes(a.time) - timeStringToMinutes(b.time); });
+  const active = trips.filter(function (trip) { return trip.status === "EN_ROUTE"; });
+
+  document.getElementById("pendingCount").textContent = pending.length + " Calls";
+  document.getElementById("activeCount").textContent = active.length + " Active";
+
+  const pendingList = document.getElementById("pendingList");
+  const activeList = document.getElementById("activeList");
+
+  pendingList.innerHTML = pending.length === 0
+    ? emptyMessage("No pending dispatch calls", "fa-circle-check")
+    : pending.map(renderPendingTrip).join("");
+
+  activeList.innerHTML = active.length === 0
+    ? emptyMessage("No active trips", "fa-taxi")
+    : active.map(renderActiveTrip).join("");
+}
+
+function emptyMessage(text, icon) {
+  return `
+    <div class="border border-dashed border-slate-800 rounded-xl p-10 text-center text-slate-600">
+      <i class="fa-solid ${icon} text-2xl mb-2"></i>
+      <p class="text-sm">${escapeHTML(text)}</p>
+    </div>
+  `;
+}
+
+/* =========================================================
+   PENDING TRIP
+========================================================= */
+
+function renderPendingTrip(trip) {
+  const availableDrivers = drivers.filter(function (driver) { return driver.status === "Available"; });
+
+  const options = availableDrivers.map(function (driver) {
+    return `<option value="${driver.id}">${escapeHTML(driverFullLabel(driver))}</option>`;
+  }).join("");
+
+  return `
+    <div class="bg-slate-950 border border-amber-500/30 rounded-xl p-4">
+      <div class="flex justify-end border-b border-slate-800 pb-2 mb-3">
+        <span class="text-xs text-slate-500"><i class="fa-regular fa-clock mr-1"></i>${escapeHTML(trip.time)}</span>
+      </div>
+
+      <div class="space-y-2 text-xs">
+        <div>
+          <span class="text-slate-500 block uppercase">Pickup</span>
+          <span class="text-white">${escapeHTML(trip.pickup)}</span>
+        </div>
+        <div>
+          <span class="text-slate-500 block uppercase">Dropoff</span>
+          <span class="text-white">${escapeHTML(trip.dropoff)}</span>
+        </div>
+        ${trip.notes ? `<div class="bg-slate-900 border border-slate-800 rounded p-2 text-slate-400">${escapeHTML(trip.notes)}</div>` : ""}
+      </div>
+
+      <div class="flex gap-2 mt-4">
+        <select onchange="assignDriver('${trip.id}', this.value)" class="input !mt-0 text-xs">
+          <option value="">Assign Available Cab</option>
+          ${options}
+        </select>
+        <button onclick="cancelTrip('${trip.id}')" class="px-3 bg-slate-900 border border-slate-700 rounded-lg text-red-400">
+          <i class="fa-solid fa-trash"></i>
+        </button>
+      </div>
+    </div>
+  `;
+}
+
+/* =========================================================
+   ACTIVE TRIP
+========================================================= */
+
+function renderActiveTrip(trip) {
+  return `
+    <div class="bg-slate-950 border border-emerald-500/30 rounded-xl p-4">
+      <div class="flex justify-between border-b border-slate-800 pb-2 mb-3">
+        <span class="text-[10px] bg-emerald-500/10 text-emerald-400 px-2 py-1 rounded">EN ROUTE</span>
+        <span class="text-xs text-slate-500"><i class="fa-regular fa-clock mr-1"></i>${escapeHTML(trip.time)}</span>
+      </div>
+
+      <div class="bg-slate-900 rounded-lg p-3 mb-3">
+        <label class="text-slate-500 text-xs block mb-1">Assigned Driver</label>
+        <select onchange="reassignDriver('${trip.id}', this.value)" class="input !mt-0 text-xs">
+          ${driverOptionsForTrip(trip, true)}
+        </select>
+      </div>
+
+      <div class="space-y-2 text-xs">
+        <div><span class="text-slate-500 block">FROM</span>${escapeHTML(trip.pickup)}</div>
+        <div><span class="text-slate-500 block">TO</span>${escapeHTML(trip.dropoff)}</div>
+      </div>
+
+      <div class="flex gap-2 mt-4">
+        <button onclick="openCompleteModal('${trip.id}')"
+                class="flex-1 bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold py-2 rounded-lg text-xs">
+          <i class="fa-solid fa-flag-checkered mr-1"></i> Complete Ride
+        </button>
+        <button onclick="cancelTrip('${trip.id}')"
+                title="Cancel this call"
+                class="px-3 bg-slate-900 border border-slate-700 rounded-lg text-red-400">
+          <i class="fa-solid fa-trash"></i>
+        </button>
+      </div>
+    </div>
+  `;
+}
+
+/* =========================================================
+   CREATE TRIP
+========================================================= */
+
+function openNewTripModal() {
+  updateDriverSelect();
+  document.getElementById("pickupInput").value = "";
+  document.getElementById("dropoffInput").value = "";
+  document.getElementById("notesInput").value = "";
+  document.getElementById("tripDriverInput").value = "";
+  document.getElementById("pickupTimeInput").value = toTimeInputValue(new Date());
+  openModal("tripModal");
+}
+
+function createTrip(event) {
+  event.preventDefault();
+
+  const pickup = document.getElementById("pickupInput").value.trim();
+  const dropoff = document.getElementById("dropoffInput").value.trim();
+  const driverId = document.getElementById("tripDriverInput").value;
+  const notes = document.getElementById("notesInput").value.trim();
+  const pickupTime = document.getElementById("pickupTimeInput").value || toTimeInputValue(new Date());
+
+  if (!pickup || !dropoff) {
+    toast("Pickup and dropoff locations are required.");
+    return;
+  }
+
+  const trip = {
+    id: "TRP-" + Math.floor(1000 + Math.random() * 9000),
+    pickup: pickup,
+    dropoff: dropoff,
+    driverId: driverId || null,
+    notes: notes,
+    fare: 9,
+    paymentMethod: "Unassigned",
+    status: driverId ? "EN_ROUTE" : "PENDING",
+    time: formatTimeInputValue(pickupTime),
+    createdAt: new Date().toISOString()
+  };
+
+  trips.unshift(trip);
+
+  if (driverId) {
+    const driver = drivers.find(function (d) { return d.id === driverId; });
+    if (driver) driver.status = "On Trip";
+  }
+
+  saveData();
+  closeModal("tripModal");
+  renderEverything();
+  toast("Dispatch created successfully.");
+}
+
+/* =========================================================
+   DRIVER ASSIGNMENT
+========================================================= */
+
+function assignDriver(tripId, driverId) {
+  if (!driverId) return;
+
+  const trip = trips.find(function (t) { return t.id === tripId; });
+  const driver = drivers.find(function (d) { return d.id === driverId; });
+  if (!trip || !driver) return;
+
+  trip.driverId = driverId;
+  trip.status = "EN_ROUTE";
+  driver.status = "On Trip";
+
+  saveData();
+  renderEverything();
+  toast("Assigned " + driverShortLabel(driver) + " to " + trip.pickup);
+}
+
+function reassignDriver(tripId, newDriverId) {
+  const trip = trips.find(function (t) { return t.id === tripId; });
+  if (!trip) return;
+  if ((trip.driverId || "") === newDriverId) return;
+
+  const isLiveTrip = trip.status === "EN_ROUTE";
+
+  if (isLiveTrip) {
+    const previousDriver = drivers.find(function (d) { return d.id === trip.driverId; });
+    if (previousDriver && previousDriver.status === "On Trip") {
+      previousDriver.status = "Available";
+    }
+    if (newDriverId) {
+      const newDriver = drivers.find(function (d) { return d.id === newDriverId; });
+      if (!newDriver) return;
+      newDriver.status = "On Trip";
+    }
+  }
+
+  trip.driverId = newDriverId || null;
+  saveData();
+  renderEverything();
+
+  if (!newDriverId) {
+    toast("Driver unassigned.");
+    return;
+  }
+
+  const label = driverShortLabel(drivers.find(function (d) { return d.id === newDriverId; }));
+  toast(isLiveTrip ? "Reassigned to " + label + "." : "Driver record updated to " + label + ".");
+}
+
+function driverOptionsForTrip(trip, includeUnassigned, restrictToAvailable) {
+  const shouldRestrict = restrictToAvailable !== false;
+
+  const eligible = shouldRestrict
+    ? drivers.filter(function (driver) { return driver.status === "Available" || driver.id === trip.driverId; })
+    : drivers;
+
+  const options = eligible.map(function (driver) {
+    const selected = driver.id === trip.driverId ? " selected" : "";
+    return `<option value="${driver.id}"${selected}>${escapeHTML(driverFullLabel(driver))}</option>`;
+  }).join("");
+
+  const unassignedOption = includeUnassigned
+    ? `<option value=""${trip.driverId ? "" : " selected"}>Unassigned</option>`
+    : "";
+
+  return unassignedOption + options;
+}
+
+/* =========================================================
+   COMPLETE TRIP
+========================================================= */
+
+function openCompleteModal(tripId) {
+  const trip = trips.find(function (t) { return t.id === tripId; });
+  if (!trip) return;
+
+  document.getElementById("completeTripId").value = trip.id;
+  document.getElementById("fareInput").value = "";
+  document.getElementById("paymentInput").value = "Cash";
+  document.getElementById("completeInfo").innerHTML =
+    `<strong>${escapeHTML(trip.pickup)}</strong> &rarr; ${escapeHTML(trip.dropoff)}<br><span class="text-slate-500">Pickup time: ${escapeHTML(trip.time)}</span>`;
+
+  openModal("completeModal");
+}
+
+function completeTrip(event) {
+  event.preventDefault();
+
+  const tripId = document.getElementById("completeTripId").value;
+  const fare = Number(document.getElementById("fareInput").value);
+  const payment = document.getElementById("paymentInput").value;
+
+  const trip = trips.find(function (t) { return t.id === tripId; });
+  if (!trip) return;
+
+  trip.fare = fare;
+  trip.paymentMethod = payment;
+  trip.status = "COMPLETED";
+  trip.completedAt = new Date().toISOString();
+
+  if (trip.driverId) {
+    const driver = drivers.find(function (d) { return d.id === trip.driverId; });
+    if (driver) driver.status = "Available";
+  }
+
+  saveData();
+  closeModal("completeModal");
+  renderEverything();
+  toast("Ride completed - $" + fare.toFixed(2));
+}
+
+/* =========================================================
+   CANCEL
+========================================================= */
+
+function cancelTrip(tripId) {
+  const trip = trips.find(function (t) { return t.id === tripId; });
+  if (!trip) return;
+
+  const confirmed = window.confirm(
+    "Cancel this call?\n\n" + trip.pickup + " \u2192 " + trip.dropoff +
+    "\n\nThis removes it completely - it will not appear in the trip logs."
+  );
+  if (!confirmed) return;
+
+  if (trip.driverId) {
+    const driver = drivers.find(function (d) { return d.id === trip.driverId; });
+    if (driver) driver.status = "Available";
+  }
+
+  trips = trips.filter(function (t) { return t.id !== tripId; });
+  saveData();
+  renderEverything();
+  toast("Call cancelled and removed.");
+}
+
+/* =========================================================
+   DRIVER MANAGEMENT
+========================================================= */
+
+function openDriverModal(driverId) {
+  document.getElementById("driverId").value = driverId || "";
+
+  if (!driverId) {
+    document.getElementById("driverModalTitle").textContent = "Add Driver";
+    document.getElementById("driverName").value = "";
+    document.getElementById("driverCallsign").value = "";
+    document.getElementById("driverVehicle").value = "";
+    document.getElementById("driverStatus").value = "Available";
+  } else {
+    const driver = drivers.find(function (d) { return d.id === driverId; });
+    if (!driver) return;
+
+    document.getElementById("driverModalTitle").textContent = "Edit Driver";
+    document.getElementById("driverName").value = driver.name;
+    document.getElementById("driverCallsign").value = driver.callsign || "";
+    document.getElementById("driverVehicle").value = driver.vehicle || "";
+    document.getElementById("driverStatus").value = driver.status === "On Trip" ? "Available" : driver.status;
+  }
+
+  openModal("driverModal");
+}
+
+function saveDriver(event) {
+  event.preventDefault();
+
+  const id = document.getElementById("driverId").value;
+  const name = document.getElementById("driverName").value.trim();
+  const callsign = document.getElementById("driverCallsign").value.trim();
+  const vehicle = document.getElementById("driverVehicle").value.trim();
+  const status = document.getElementById("driverStatus").value;
+
+  if (!name) {
+    toast("Driver name is required.");
+    return;
+  }
+
+  if (id) {
+    const driver = drivers.find(function (d) { return d.id === id; });
+    if (driver) {
+      driver.name = name;
+      driver.callsign = callsign;
+      driver.vehicle = vehicle;
+      driver.status = status;
+    }
+  } else {
+    drivers.push({
+      id: "DRV-" + Math.floor(100 + Math.random() * 900),
+      name: name,
+      callsign: callsign,
+      vehicle: vehicle,
+      status: status
+    });
+  }
+
+  saveData();
+  closeModal("driverModal");
+  renderEverything();
+  toast("Driver saved.");
+}
+
+function editDriver(id) {
+  openDriverModal(id);
+}
+
+function deleteDriver(id) {
+  const activeTrip = trips.some(function (trip) {
+    return trip.driverId === id && trip.status === "EN_ROUTE";
+  });
+
+  if (activeTrip) {
+    toast("Cannot delete a driver on an active trip.");
+    return;
+  }
+
+  drivers = drivers.filter(function (driver) { return driver.id !== id; });
+
+  saveData();
+  renderEverything();
+  toast("Driver removed.");
+}
+
+/* =========================================================
+   DRIVER RENDER
+========================================================= */
+
+function renderDrivers() {
+  const grid = document.getElementById("driverGrid");
+
+  if (drivers.length === 0) {
+    grid.innerHTML = `
+      <div class="col-span-full border border-dashed border-slate-800 rounded-xl p-12 text-center text-slate-600">
+        <i class="fa-solid fa-users text-3xl mb-2"></i>
+        <p>No drivers registered.</p>
+      </div>
+    `;
+    return;
+  }
+
+  grid.innerHTML = drivers.map(function (driver) {
+    const activeTrip = trips.find(function (trip) {
+      return trip.driverId === driver.id && trip.status === "EN_ROUTE";
+    });
+
+    const status = activeTrip ? "On Active Ride" : driver.status;
+
+    let color = "text-emerald-400 bg-emerald-500/10";
+    if (status === "On Break") color = "text-amber-400 bg-amber-500/10";
+    if (status === "Offline") color = "text-slate-400 bg-slate-800";
+    if (status === "On Active Ride") color = "text-blue-400 bg-blue-500/10";
+
+    return `
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-4">
+        <div class="flex justify-between">
+          <div class="flex gap-3">
+            <div class="w-10 h-10 bg-slate-950 rounded-lg flex items-center justify-center text-cab-500">
+              <i class="fa-solid fa-taxi"></i>
+            </div>
+            <div>
+              <div class="font-bold">${escapeHTML(driver.name)}</div>
+              ${driver.callsign ? `<div class="text-xs text-cab-500 font-mono">${escapeHTML(driver.callsign)}</div>` : ""}
+            </div>
+          </div>
+          <span class="text-[10px] px-2 py-1 rounded ${color}">${escapeHTML(status)}</span>
+        </div>
+
+        <div class="mt-4 text-xs text-slate-500">
+          Vehicle: <span class="text-slate-300">${escapeHTML(driver.vehicle || "Not specified")}</span>
+        </div>
+
+        <div class="mt-4 pt-3 border-t border-slate-800 flex justify-end gap-2">
+          <button onclick="editDriver('${driver.id}')" class="px-2 py-1 text-slate-400 hover:text-white">
+            <i class="fa-solid fa-pen"></i>
+          </button>
+          <button onclick="deleteDriver('${driver.id}')" class="px-2 py-1 text-red-400">
+            <i class="fa-solid fa-trash"></i>
+          </button>
+        </div>
+      </div>
+    `;
+  }).join("");
+}
+
+/* =========================================================
+   DRIVER SELECT
+========================================================= */
+
+function updateDriverSelect() {
+  const select = document.getElementById("tripDriverInput");
+  select.innerHTML = `<option value="">Leave Unassigned</option>`;
+
+  drivers
+    .filter(function (driver) { return driver.status === "Available"; })
+    .forEach(function (driver) {
+      const option = document.createElement("option");
+      option.value = driver.id;
+      option.textContent = driverFullLabel(driver);
+      select.appendChild(option);
+    });
+}
+
+/* =========================================================
+   LOGS
+========================================================= */
+
+function renderLogs() {
+  const body = document.getElementById("logsBody");
+  const cards = document.getElementById("logsCards");
+  const query = (document.getElementById("searchInput")?.value || "").toLowerCase().trim();
+  const filter = document.getElementById("statusFilter")?.value || "ALL";
+
+  const filtered = trips.filter(function (trip) {
+    const matchesStatus = filter === "ALL" || trip.status === filter;
+    const text = (trip.id + " " + trip.pickup + " " + trip.dropoff).toLowerCase();
+    return matchesStatus && (!query || text.includes(query));
+  });
+
+  body.innerHTML = filtered.length === 0
+    ? `<tr><td colspan="7" class="p-10 text-center text-slate-500">No matching trip records.</td></tr>`
+    : filtered.map(renderLogRow).join("");
+
+  if (cards) {
+    cards.innerHTML = filtered.length === 0
+      ? `<div class="p-10 text-center text-slate-500 text-sm">No matching trip records.</div>`
+      : filtered.map(renderLogCard).join("");
+  }
+}
+
+function renderLogRow(trip) {
+  const driver = drivers.find(function (d) { return d.id === trip.driverId; });
+  const fareColor = trip.status === "COMPLETED" ? "text-emerald-400" : "text-slate-500";
+
+  if (!logsUnlocked) {
+    return `
+      <tr class="hover:bg-slate-800/40">
+        <td class="p-3">
+          <strong class="text-white">${escapeHTML(trip.id)}</strong>
+          <div class="text-[10px] text-slate-500">${escapeHTML(trip.time)}</div>
+        </td>
+        <td class="p-3">${escapeHTML(trip.pickup)}</td>
+        <td class="p-3">${escapeHTML(trip.dropoff)}</td>
+        <td class="p-3 font-mono">${escapeHTML(driverShortLabel(driver))}</td>
+        <td class="p-3 text-slate-400">${escapeHTML(trip.paymentMethod || "Unassigned")}</td>
+        <td class="p-3">${statusBadge(trip.status)}</td>
+        <td class="p-3 text-right font-bold ${fareColor}">$${Number(trip.fare || 0).toFixed(2)}</td>
+      </tr>
+    `;
+  }
+
+  return `
+    <tr class="hover:bg-slate-800/40">
+      <td class="p-3">
+        <strong class="text-white block mb-1">${escapeHTML(trip.id)}</strong>
+        <input type="time" value="${timeStringToInputValue(trip.time)}"
+               onchange="updateTripField('${trip.id}', 'time', formatTimeInputValue(this.value))"
+               class="input !mt-0 text-xs !py-1 w-28">
+      </td>
+      <td class="p-3">
+        <input type="text" value="${escapeHTML(trip.pickup)}"
+               onchange="updateTripField('${trip.id}', 'pickup', this.value)"
+               class="input !mt-0 text-xs !py-1">
+      </td>
+      <td class="p-3">
+        <input type="text" value="${escapeHTML(trip.dropoff)}"
+               onchange="updateTripField('${trip.id}', 'dropoff', this.value)"
+               class="input !mt-0 text-xs !py-1">
+      </td>
+      <td class="p-3 font-mono">
+        <select onchange="reassignDriver('${trip.id}', this.value)" class="input !mt-0 text-xs !py-1">
+          ${driverOptionsForTrip(trip, true, false)}
+        </select>
+      </td>
+      <td class="p-3">
+        <select onchange="updateTripField('${trip.id}', 'paymentMethod', this.value)" class="input !mt-0 text-xs !py-1">
+          ${paymentOptionsForTrip(trip)}
+        </select>
+      </td>
+      <td class="p-3">
+        <select onchange="updateTripField('${trip.id}', 'status', this.value)" class="input !mt-0 text-xs !py-1">
+          ${statusOptionsForTrip(trip)}
+        </select>
+      </td>
+      <td class="p-3 text-right">
+        <input type="number" step="0.01" min="0" value="${Number(trip.fare || 0).toFixed(2)}"
+               onchange="updateTripField('${trip.id}', 'fare', Number(this.value) || 0)"
+               class="input !mt-0 text-xs !py-1 text-right w-20">
+      </td>
+    </tr>
+  `;
+}
+
+function renderLogCard(trip) {
+  const driver = drivers.find(function (d) { return d.id === trip.driverId; });
+
+  if (!logsUnlocked) {
+    return `
+      <div class="p-4">
+        <div class="flex justify-between items-start gap-3">
+          <div class="min-w-0">
+            <div class="font-bold text-white text-sm truncate">${escapeHTML(trip.pickup)}</div>
+            <div class="text-xs text-slate-500 truncate">&rarr; ${escapeHTML(trip.dropoff)}</div>
+          </div>
+          ${statusBadge(trip.status)}
+        </div>
+        <div class="flex justify-between text-xs text-slate-400 mt-2">
+          <span><i class="fa-regular fa-clock mr-1"></i>${escapeHTML(trip.time)}</span>
+          <span class="font-mono">${escapeHTML(driverShortLabel(driver))}</span>
+        </div>
+        <div class="flex justify-between text-xs pt-2 mt-2 border-t border-slate-800">
+          <span class="text-slate-500">${escapeHTML(trip.paymentMethod || "Unassigned")}</span>
+          <span class="font-bold ${trip.status === "COMPLETED" ? "text-emerald-400" : "text-slate-500"}">$${Number(trip.fare || 0).toFixed(2)}</span>
+        </div>
+      </div>
+    `;
+  }
+
+  return `
+    <div class="p-4 space-y-3">
+      <div class="flex justify-between items-center">
+        <span class="font-mono text-xs text-slate-500">${escapeHTML(trip.id)}</span>
+        ${statusOptionsWrapped(trip)}
+      </div>
+      <div>
+        <label class="text-[10px] uppercase text-slate-500">Pickup</label>
+        <input type="text" value="${escapeHTML(trip.pickup)}"
+               onchange="updateTripField('${trip.id}', 'pickup', this.value)" class="input !mt-1 text-sm">
+      </div>
+      <div>
+        <label class="text-[10px] uppercase text-slate-500">Dropoff</label>
+        <input type="text" value="${escapeHTML(trip.dropoff)}"
+               onchange="updateTripField('${trip.id}', 'dropoff', this.value)" class="input !mt-1 text-sm">
+      </div>
+      <div class="grid grid-cols-2 gap-2">
+        <div>
+          <label class="text-[10px] uppercase text-slate-500">Pickup Time</label>
+          <input type="time" value="${timeStringToInputValue(trip.time)}"
+                 onchange="updateTripField('${trip.id}', 'time', formatTimeInputValue(this.value))" class="input !mt-1 text-sm">
+        </div>
+        <div>
+          <label class="text-[10px] uppercase text-slate-500">Fare</label>
+          <input type="number" step="0.01" min="0" value="${Number(trip.fare || 0).toFixed(2)}"
+                 onchange="updateTripField('${trip.id}', 'fare', Number(this.value) || 0)" class="input !mt-1 text-sm">
+        </div>
+      </div>
+      <div class="grid grid-cols-2 gap-2">
+        <div>
+          <label class="text-[10px] uppercase text-slate-500">Driver</label>
+          <select onchange="reassignDriver('${trip.id}', this.value)" class="input !mt-1 text-sm">
+            ${driverOptionsForTrip(trip, true, false)}
+          </select>
+        </div>
+        <div>
+          <label class="text-[10px] uppercase text-slate-500">Payment</label>
+          <select onchange="updateTripField('${trip.id}', 'paymentMethod', this.value)" class="input !mt-1 text-sm">
+            ${paymentOptionsForTrip(trip)}
+          </select>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function statusOptionsWrapped(trip) {
+  return `
+    <select onchange="updateTripField('${trip.id}', 'status', this.value)" class="input !mt-0 text-xs !py-1 !w-auto">
+      ${statusOptionsForTrip(trip)}
+    </select>
+  `;
+}
+
+/* =========================================================
+   TRIP LOG EDIT LOCK
+========================================================= */
+
+function toggleLogsEdit() {
+  const button = document.getElementById("logsEditToggle");
+
+  if (logsUnlocked) {
+    logsUnlocked = false;
+    button.innerHTML = `<i class="fa-solid fa-lock mr-1"></i> Unlock Editing`;
+    renderLogs();
+    toast("Trip log editing locked.");
+    return;
+  }
+
+  const entered = window.prompt("Enter password to edit trip logs:");
+  if (entered === null) return;
+
+  if (entered === "NCenable") {
+    logsUnlocked = true;
+    button.innerHTML = `<i class="fa-solid fa-lock-open mr-1"></i> Lock Editing`;
+    renderLogs();
+    toast("Trip log editing unlocked.");
+  } else {
+    toast("Incorrect password.");
+  }
+}
+
+function updateTripField(tripId, field, value) {
+  const trip = trips.find(function (t) { return t.id === tripId; });
+  if (!trip) return;
+
+  if (field === "status") {
+    const driver = drivers.find(function (d) { return d.id === trip.driverId; });
+    if (value === "EN_ROUTE" && driver) driver.status = "On Trip";
+    if (value !== "EN_ROUTE" && driver && driver.status === "On Trip") driver.status = "Available";
+  }
+
+  trip[field] = value;
+  saveData();
+  renderEverything();
+  toast("Trip updated.");
+}
+
+function paymentOptionsForTrip(trip) {
+  const options = [
+    { value: "Unassigned", label: "Unassigned" },
+    { value: "Cash", label: "Cash" },
+    { value: "Credit Card", label: "Credit Card" },
+    { value: "Voucher", label: "Voucher / Account" }
+  ];
+
+  return options.map(function (option) {
+    const selected = (trip.paymentMethod || "Unassigned") === option.value ? " selected" : "";
+    return `<option value="${option.value}"${selected}>${option.label}</option>`;
+  }).join("");
+}
+
+function statusOptionsForTrip(trip) {
+  const statuses = ["PENDING", "EN_ROUTE", "COMPLETED"];
+  return statuses.map(function (status) {
+    const selected = trip.status === status ? " selected" : "";
+    return `<option value="${status}"${selected}>${status.replace("_", " ")}</option>`;
+  }).join("");
+}
+
+function statusBadge(status) {
+  const classes = {
+    COMPLETED: "text-emerald-400 bg-emerald-500/10",
+    EN_ROUTE: "text-blue-400 bg-blue-500/10",
+    PENDING: "text-amber-400 bg-amber-500/10",
+    CANCELLED: "text-red-400 bg-red-500/10"
+  };
+
+  return `<span class="px-2 py-1 rounded text-[10px] ${classes[status] || "text-slate-400 bg-slate-800"}">${escapeHTML(status)}</span>`;
+}
+
+/* =========================================================
+   PDF EXPORT
+========================================================= */
+
+function exportPDF() {
+  if (!window.jspdf || typeof window.jspdf.jsPDF !== "function") {
+    alert("PDF engine could not be loaded.\n\nMake sure this computer is connected to the internet.");
+    return;
+  }
+
+  const jsPDF = window.jspdf.jsPDF;
+  const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "letter" });
+
+  if (typeof doc.autoTable !== "function") {
+    alert("PDF table plugin could not be loaded.\n\nPlease refresh the page and try again.");
+    return;
+  }
+
+  /* DISPATCHER NAME - pull the live header value, then confirm/allow entry */
+  syncControllerFromInput();
+
+  const dispatcherName = window.prompt(
+    "Dispatcher name for this report:",
+    controller || ""
+  );
+
+  if (dispatcherName === null) return;
+
+  if (dispatcherName.trim() && dispatcherName.trim() !== controller) {
+    document.getElementById("controllerInput").value = dispatcherName.trim();
+    saveController();
+  }
+
+  const reportDispatcher = dispatcherName.trim() || "Unassigned";
+
+  const query = (document.getElementById("searchInput")?.value || "").toLowerCase().trim();
+  const filter = document.getElementById("statusFilter")?.value || "ALL";
+
+  const filteredTrips = trips.filter(function (trip) {
+    const matchesStatus = filter === "ALL" || trip.status === filter;
+    const searchText = (trip.id + " " + trip.pickup + " " + trip.dropoff).toLowerCase();
+    return matchesStatus && (!query || searchText.includes(query));
+  });
+
+  /* HEADER */
+  doc.setFillColor(15, 23, 42);
+  doc.rect(0, 0, 279.4, 30, "F");
+
+  doc.setTextColor(245, 158, 11);
+  doc.setFontSize(18);
+  doc.setFont("helvetica", "bold");
+  doc.text("NORTHWOODS CAB", 14, 15);
+
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(10);
+  doc.setFont("helvetica", "normal");
+  doc.text("Dispatch Operations Report - Wausau, WI", 14, 22);
+
+  const now = new Date();
+  doc.text("Generated: " + now.toLocaleDateString() + " " + now.toLocaleTimeString(), 190, 22);
+
+  doc.setTextColor(30, 41, 59);
+  doc.setFontSize(10);
+  doc.text("Dispatcher: " + reportDispatcher, 14, 38);
+  doc.text("Filter: " + filter + (query ? " | Search: " + query : ""), 14, 44);
+
+  /* TABLE - oldest call first */
+  const orderedTrips = filteredTrips.slice().sort(function (a, b) {
+    return String(a.createdAt || "").localeCompare(String(b.createdAt || ""));
+  });
+
+  const rows = orderedTrips.map(function (trip) {
+    const driver = drivers.find(function (d) { return d.id === trip.driverId; });
+    return [
+      trip.time,
+      trip.pickup,
+      trip.dropoff,
+      driverShortLabel(driver),
+      trip.paymentMethod || "Unassigned",
+      trip.status,
+      "$" + Number(trip.fare || 0).toFixed(2)
+    ];
+  });
+
+  doc.autoTable({
+    startY: 49,
+    head: [["Time", "Pickup", "Dropoff", "Unit", "Payment", "Status", "Fare"]],
+    body: rows,
+    theme: "grid",
+    headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontStyle: "bold" },
+    styles: { font: "helvetica", fontSize: 7, cellPadding: 2, overflow: "linebreak" },
+    columnStyles: {
+      0: { cellWidth: 20 },
+      1: { cellWidth: 55 },
+      2: { cellWidth: 55 },
+      3: { cellWidth: 25 },
+      4: { cellWidth: 28 },
+      5: { cellWidth: 25 },
+      6: { cellWidth: 20, halign: "right" }
+    },
+    didDrawPage: function () {
+      const height = doc.internal.pageSize.getHeight();
+      const width = doc.internal.pageSize.getWidth();
+
+      doc.setFontSize(7);
+      doc.setTextColor(100, 116, 139);
+      doc.text("Northwoods Cab - Dispatch Operations", 14, height - 8);
+      doc.text("Dispatcher: " + reportDispatcher, width / 2 - 20, height - 8);
+      doc.text("Page " + doc.internal.getNumberOfPages(), width - 25, height - 8);
+    }
+  });
+
+  /* SAVE */
+  const date = new Date().toISOString().slice(0, 10);
+  const dispatcherSlug = reportDispatcher.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+  doc.save("northwoods-cab-dispatch-" + date + "-" + dispatcherSlug + ".pdf");
+  toast("PDF exported successfully.");
+}
+
+/* =========================================================
+   CONTROLLER
+========================================================= */
+
+function syncControllerFromInput() {
+  const name = document.getElementById("controllerInput").value.trim();
+  if (name !== controller) {
+    controller = name;
+    saveData();
+  }
+}
+
+function saveController() {
+  const name = document.getElementById("controllerInput").value.trim();
+  controller = name;
+
+  if (name && !dispatchers.some(function (d) { return d.toLowerCase() === name.toLowerCase(); })) {
+    dispatchers.push(name);
+    dispatchers.sort(function (a, b) { return a.localeCompare(b); });
+    populateDispatcherList();
+  }
+
+  saveData();
+  toast(name ? "Dispatcher set to " + name + "." : "Dispatcher cleared.");
+}
+
+function populateDispatcherList() {
+  const list = document.getElementById("dispatcherList");
+  list.innerHTML = dispatchers.map(function (name) {
+    return `<option value="${escapeHTML(name)}"></option>`;
+  }).join("");
+}
+
+/* =========================================================
+   END SHIFT (CLEAR PERSISTENT DATA)
+========================================================= */
+
+function openEndShiftModal() {
+  openModal("endShiftModal");
+}
+
+function endShift() {
+  localStorage.removeItem("northwoods_drivers");
+  localStorage.removeItem("northwoods_trips");
+  localStorage.removeItem("northwoods_controller");
+
+  drivers = [];
+  trips = [];
+  controller = "";
+
+  document.getElementById("controllerInput").value = "";
+
+  closeModal("endShiftModal");
+  renderEverything();
+  showView("board");
+  toast("Shift ended - all saved data cleared from this device.");
+}
+
+/* =========================================================
+   MODALS
+========================================================= */
+
+function openModal(id) {
+  const modal = document.getElementById(id);
+  modal.classList.remove("hidden");
+  modal.classList.add("flex");
+}
+
+function closeModal(id) {
+  const modal = document.getElementById(id);
+  modal.classList.add("hidden");
+  modal.classList.remove("flex");
+}
+
+/* =========================================================
+   TOAST
+========================================================= */
+
+let toastTimer = null;
+
+function toast(message) {
+  const element = document.getElementById("toast");
+  element.textContent = message;
+  element.classList.remove("hidden");
+
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(function () {
+    element.classList.add("hidden");
+  }, 3000);
+}
+
+/* =========================================================
+   DRIVER LABEL HELPERS
+========================================================= */
+
+function driverFullLabel(driver) {
+  if (!driver) return "Unassigned";
+  return driver.callsign ? driver.callsign + " - " + driver.name : driver.name;
+}
+
+function driverShortLabel(driver) {
+  if (!driver) return "Unassigned";
+  return driver.callsign || driver.name;
+}
+
+/* =========================================================
+   TIME HELPERS
+========================================================= */
+
+function toTimeInputValue(date) {
+  const hours = String(date.getHours()).padStart(2, "0");
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  return hours + ":" + minutes;
+}
+
+function formatTimeInputValue(value) {
+  if (!value) return "";
+  const parts = value.split(":");
+  const date = new Date();
+  date.setHours(Number(parts[0]), Number(parts[1]), 0, 0);
+  return date.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
+}
+
+function timeStringToMinutes(value) {
+  const match = /(\d{1,2}):(\d{2})\s*([AP]M)/i.exec(value || "");
+  if (!match) return 0;
+  let hour = parseInt(match[1], 10) % 12;
+  const minute = parseInt(match[2], 10);
+  if (/pm/i.test(match[3])) hour += 12;
+  return hour * 60 + minute;
+}
+
+function timeStringToInputValue(value) {
+  const totalMinutes = timeStringToMinutes(value);
+  const hour = Math.floor(totalMinutes / 60);
+  const minute = totalMinutes % 60;
+  return String(hour).padStart(2, "0") + ":" + String(minute).padStart(2, "0");
+}
+
+/* =========================================================
+   HTML ESCAPE
+========================================================= */
+
+function escapeHTML(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+</script>
+
+<script>
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", function () {
+      navigator.serviceWorker.register("service-worker.js").catch(function () {});
+    });
+  }
+</script>
+
+</body>
+</html>
